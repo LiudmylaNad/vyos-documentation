@@ -39,13 +39,26 @@ set firewall group ipv6-address-group ADR-INSIDE-v6 address 2001:db8::1
 Provide an IPv4 or IPv6 address group description.
 ```
 
+```{cfgcmd} set firewall group address-group \<name\> include \<name\>
+
+Include another address-group as a member of this group. The
+referenced group must already exist and be of the same type.
+```
+
+```{cfgcmd} set firewall group ipv6-address-group \<name\> include \<name\>
+
+Include another ipv6-address-group as a member of this group. The
+referenced group must already exist and be of the same type.
+```
+
 ### Remote Groups
 
 A **remote-group** uses a URL that hosts a newline-delimited list of IPv4
 and/or IPv6 addresses, CIDRs, and ranges. VyOS pulls this list periodically
-according to the frequency you define in the firewall **resolver-interval**
-and loads matching entries into the group for use in rules. The list is cached
-in persistent storage, so rules continue to function if updates fail.
+according to the frequency you define in the group **interval** (or, if not
+set, the firewall **resolver-interval**) and loads matching entries into the
+group for use in rules. The list is cached in persistent storage, so rules
+continue to function if updates fail.
 
 ```{cfgcmd} set firewall group remote-group \<name\> url \<http(s) url\>
 
@@ -53,9 +66,47 @@ Specify a remote list of IPv4 and/or IPv6 addresses, ranges, and CIDRs
 to fetch.
 ```
 
+::::{note}
+Quote URLs that contain a query string, otherwise an unquoted `&` silently
+truncates the value. On releases where the `?` key always triggers
+completion help, enter the literal `?` by pressing `Ctrl-V` followed by
+`?`:
+
+``` none
+set firewall group remote-group AbuseIPDB url 'https://api.abuseipdb.com/api/v2/blacklist?key=YOUR_KEY&plaintext'
+```
+::::
+
+::::{note}
+When a download fails, `vyos-domain-resolver` logs a redacted URL with the
+query string removed, keeping API keys out of the system log. A logged URL
+without its query parameters does not mean the configured value is wrong —
+verify it with `show firewall group remote-group <name> url` instead.
+::::
+
+```{cfgcmd} set firewall group remote-group \<name\> interval \<interval\>
+
+Set the update interval for this remote group, from 60 seconds to 4 weeks.
+The interval can be given in seconds (e.g. `300`) or with the time unit
+suffixes `s`, `m`, `h`, `d` or `w` (e.g. `4h`). Multiple suffixes may be
+combined (e.g. `1h30m`). If not set, the group follows the global
+`firewall global-options resolver-interval`.
+```
+
 ```{cfgcmd} set firewall group remote-group \<name\> description \<text\>
 
 Set a description for a remote group.
+```
+
+```{cfgcmd} set firewall group remote-group \<name\> interval \<interval\>
+
+Override the global **resolver-interval** for this remote group.
+Accepts a plain number of seconds or a number with a time-unit
+suffix: ``s``, ``m``, ``h``, ``d``, ``w`` (e.g. ``4h``). The value is
+converted to seconds and must be between 60 and 2419200 (4 weeks)
+after conversion, so a suffixed value like ``30s`` is rejected the
+same as the plain number ``30``. If not set, the remote group falls
+back to **firewall global-options resolver-interval**.
 ```
 
 The remote list format is flexible. VyOS attempts to parse the first word of
@@ -101,6 +152,18 @@ set firewall group ipv6-network-group NET-INSIDE-v6 network 2001:db8::/64
 Provide an IPv4 or IPv6 network group description.
 ```
 
+```{cfgcmd} set firewall group network-group \<name\> include \<name\>
+
+Include another network-group as a member of this group. The
+referenced group must already exist and be of the same type.
+```
+
+```{cfgcmd} set firewall group ipv6-network-group \<name\> include \<name\>
+
+Include another ipv6-network-group as a member of this group. The
+referenced group must already exist and be of the same type.
+```
+
 ### Interface Groups
 
 An **interface group** represents a collection of interfaces.
@@ -120,6 +183,12 @@ set firewall group interface-group LAN interface eth3*
 ```{cfgcmd} set firewall group interface-group \<name\> description \<text\>
 
 Provide an interface group description.
+```
+
+```{cfgcmd} set firewall group interface-group \<name\> include \<name\>
+
+Include another interface-group as a member of this group. The
+referenced group must already exist and be of the same type.
 ```
 
 ### Port Groups
@@ -146,6 +215,12 @@ set firewall group port-group PORT-TCP-SERVER1 port 5000-5010
 Provide a port group description.
 ```
 
+```{cfgcmd} set firewall group port-group \<name\> include \<name\>
+
+Include another port-group as a member of this group. The referenced
+group must already exist and be of the same type.
+```
+
 ### MAC Groups
 
 A **mac group** represents a collection of mac addresses.
@@ -163,6 +238,12 @@ set firewall group mac-group MAC-G01 mac-address 4c:d5:77:c0:19:81
 ```{cfgcmd} set firewall group mac-group \<name\> description \<text\>
 
 Provide a MAC group description.
+```
+
+```{cfgcmd} set firewall group mac-group \<name\> include \<name\>
+
+Include another mac-group as a member of this group. The referenced
+group must already exist and be of the same type.
 ```
 
 ### Domain Groups

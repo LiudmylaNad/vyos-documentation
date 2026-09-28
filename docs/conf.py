@@ -53,6 +53,18 @@ extensions = ['sphinx.ext.intersphinx',
               'sphinx.ext.todo',
               'sphinx.ext.ifconfig',
               'sphinx.ext.graphviz',
+              # LaTeX-only: converts image formats the LaTeX/PDF builder can't
+              # embed natively (webp, svg, ...) to PNG at build time. The
+              # LaTeX builder's supported_image_types is ['application/pdf',
+              # 'image/png', 'image/jpeg'] — without this, unsupported
+              # images (nearly all of ours are .webp) are silently dropped
+              # from the PDF output. No effect on the HTML builder, which
+              # supports webp/svg natively in the browser; imgconverter
+              # only fires post-transforms when the active builder's
+              # supported_image_types doesn't already cover the source
+              # format. See `image_converter` below + docker/im-convert.sh
+              # for the conversion command this depends on.
+              'sphinx.ext.imgconverter',
               'notfound.extension',
               'autosectionlabel',
               'myst_parser',
@@ -61,6 +73,20 @@ extensions = ['sphinx.ext.intersphinx',
               'sphinx_llms_txt',
               'sphinx_sitemap',
 ]
+
+# sphinx.ext.imgconverter: use a thin wrapper (docker/im-convert.sh, installed
+# on PATH as `im-convert`) instead of ImageMagick's `convert` directly.
+# Debian's `imagemagick` package is built --without-rsvg, so its built-in SVG
+# coder (a minimal libxml2-based renderer, not a librsvg wrapper) can't
+# rasterize SVGs that embed a base64 raster <image> element — common in
+# diagrams exported from draw.io/diagrams.net — and fails with "unable to
+# open image `image/png;base64,...'". The wrapper routes .svg sources to
+# `rsvg-convert` (from librsvg2-bin) directly and everything else (webp,
+# gif, pdf, ...) through ImageMagick's `convert` as usual. If `im-convert`
+# isn't on PATH (e.g. a build environment other than docker/Dockerfile),
+# imgconverter's own `is_available()` check logs a warning and skips
+# conversion rather than failing the build.
+image_converter = 'im-convert'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -97,6 +123,7 @@ gettext_uuid = False
 exclude_patterns = [
     u'_build', 'Thumbs.db', '.DS_Store', '_include/vyos-1x',
     '_rst_legacy',
+    'superpowers',
 ]
 
 # The name of the Pygments (syntax highlighting) style to use.
@@ -125,13 +152,44 @@ html_static_path = ['_static']
 
 html_extra_path = ['_html_extra']
 
-html_baseurl = 'https://docs.vyos.io/en/rolling/'
+# Version picker + status banner + language scaffold (docs/_static/js/version-picker.js,
+# docs/_static/css/version-picker.css). Appended rather than assigned in case a later
+# addition to this file defines these lists first. Registered unconditionally: it degrades
+# silently on ReadTheDocs (fetch of /versions.json fails there, so nothing renders).
+# globals().get(...) (not a bare `html_js_files` reference guarded by `'html_js_files' in
+# dir()`) avoids a static-analysis F821 (possibly-undefined name) while keeping the same
+# runtime behavior: append to an existing list if one was already defined, else start fresh.
+html_js_files = [*globals().get('html_js_files', []), 'js/version-picker.js']
+html_css_files = [*globals().get('html_css_files', []), 'css/version-picker.css']
+
+# CF-Workers builds inject DOCS_VERSION_SLUG (docs-build.yml); ReadTheDocs builds
+# (until sunset) run plain Sphinx with no Pagefind step, so the Pagefind wrapper
+# script + the searchbox.html override (docs/_templates/searchbox.html) must only
+# activate for CF builds — otherwise RTD visitors hit a 404ing search mount.
+_vyos_cf_build = bool(os.environ.get('DOCS_VERSION_SLUG'))
+if _vyos_cf_build:
+    html_js_files = [*html_js_files, 'js/pagefind-wrapper.js']
+
+# Version slug: CF-Workers builds inject DOCS_VERSION_SLUG (docs-build.yml);
+# ReadTheDocs builds (until sunset) fall back to the RTD env vars; local builds
+# default to 'rolling'.
+_docs_slug = os.environ.get('DOCS_VERSION_SLUG')
+if not _docs_slug and os.environ.get('READTHEDOCS_VERSION'):
+    _docs_slug = os.environ['READTHEDOCS_VERSION']
+    if _docs_slug == 'latest':
+        _docs_slug = 'rolling'
+if not _docs_slug:
+    _docs_slug = 'rolling'
+
+html_baseurl = f'https://docs.vyos.io/en/{_docs_slug}/'
 
 _rtd_version_type = os.environ.get('READTHEDOCS_VERSION_TYPE', '')
 _github_version = (
     os.environ.get('READTHEDOCS_GIT_COMMIT_HASH', 'rolling')
     if _rtd_version_type == 'external'
-    else os.environ.get('READTHEDOCS_GIT_IDENTIFIER', 'rolling')
+    else os.environ.get(
+        'DOCS_VERSION_BRANCH', os.environ.get('READTHEDOCS_GIT_IDENTIFIER', 'rolling')
+    )
 )
 
 html_context = {
@@ -142,6 +200,7 @@ html_context = {
     'conf_py_path': '/docs/',
     'gtm_id': os.environ.get('GTM_ID', ''),
     'cookiebot_id': os.environ.get('COOKIEBOT_ID', ''),
+    'vyos_cf_build': _vyos_cf_build,
 }
 
 # sphinx-sitemap: baseurl already includes /en/rolling/, so skip lang+version
